@@ -143,11 +143,6 @@ On first launch, the MediaPipe hand landmark model (`hand_landmarker.task`, ~29 
 | `[` | Decrease brush size |
 | `]` | Increase brush size |
 
-### Mouse
-
-- **Left-click** on any panel button to activate it immediately.
-- **Scroll wheel** while the cursor is over the panel to scroll through controls.
-
 ---
 
 ## Brush System
