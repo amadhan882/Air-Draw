@@ -1,385 +1,258 @@
-# Air-Draw Hand Painter
+# Hand Painter
 
-[![Python](https://img.shields.io/badge/Python-Required-blue)](https://www.python.org/)
-[![MediaPipe](https://img.shields.io/badge/MediaPipe-Hands-success)](https://ai.google.dev/edge/mediapipe)
-[![Pygame](https://img.shields.io/badge/Pygame-Rendering-success)](https://www.pygame.org/)
-[![OpenCV](https://img.shields.io/badge/OpenCV-Camera-success)](https://opencv.org/)
+![Python](https://img.shields.io/badge/Python-3.8%2B-blue?style=flat-square&logo=python&logoColor=white)
+![MediaPipe](https://img.shields.io/badge/MediaPipe-Hand%20Landmarker-orange?style=flat-square)
+![Pygame](https://img.shields.io/badge/Pygame-2.x-green?style=flat-square)
+![OpenCV](https://img.shields.io/badge/OpenCV-4.x-red?style=flat-square&logo=opencv&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-lightgrey?style=flat-square)
+![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-informational?style=flat-square)
+![Author](https://img.shields.io/badge/Author-Madhan%20Alagarsamy-blueviolet?style=flat-square&logo=github)
 
-A single-file hand-tracking drawing app built with MediaPipe, OpenCV, and Pygame.
+A real-time, camera-based hand-tracking drawing application built with MediaPipe, OpenCV, and Pygame. Draw on a virtual canvas using nothing but your hands — no stylus, no mouse, no touch screen required.
 
-This README only documents behavior that is present in `hand_painter.py`.
-
-## What the code does
-
-- Opens a webcam feed and mirrors frames horizontally.
-- Runs MediaPipe `HandLandmarker` in `VIDEO` mode on a background thread.
-- Tracks up to 2 hands and uses handedness labels (`Left`, `Right`) to manage separate stroke state.
-- Draws to a transparent Pygame canvas layered over a dimmed camera/background view.
-- Supports drawing in two modes:
-  - `CONTINUOUS`
-  - `PINCH`
-
-## Confirmed feature set from code
-
-### Brush system
-
-- Sizes: `XS`, `S`, `M`, `L`
-- Colors: 10 presets (`Green`, `Cyan`, `Pink`, `Gold`, `White`, `Red`, `Orange`, `Purple`, `Sky`, `Lime`)
-- Styles:
-  - `NORMAL`
-  - `CHALK`
-  - `HEART`, `STAR`, `SQUARE`, `DIAMOND`, `TRIANGLE`, `CROSS`, `HEXAGON`, `PENTAGON`, `BUBBLE`, `DOTS`, `OUTLINE`, `SPARKLE`, `CLOUD`, `LEAF`, `FLOWER`, `RAINDROP`
-  - `ERASER` (added at runtime)
-
-### Interaction and gestures
-
-- Pinch detection between thumb tip (`4`) and index tip (`8`) with hysteresis thresholds.
-- Finger spread (index tip `8` to pinky tip `20`) controls brush alpha in the range `60..255`.
-- Swipe gestures while hand is open:
-  - Up swipe: clear
-  - Left swipe: undo
-
-### Symmetry and effects
-
-- Symmetry modes:
-  - `NONE`
-  - `VERTICAL`
-  - `HORIZONTAL`
-  - `QUAD`
-- Optional glow effect toggle (`GLOW:ON/OFF`).
-
-### UI panel behavior
-
-- Right-side panel with sections:
-  - Mode / Symmetry / Glow
-  - Brush size
-  - Color
-  - Style
-  - Actions (`UNDO`, `CLR`, `EXP`)
-- Panel supports:
-  - Hover dwell activation
-  - Pinch-click activation
-  - Mouse wheel scroll in panel area
-  - Mouse click activation
-- Panel is automatically hidden while drawing outside the panel area.
-
-### Export
-
-- Export action saves a PNG with timestamp format:
-  - `handpainter_YYYYMMDD_HHMMSS.png`
-- Exported image is composited on a dark background `(15, 15, 20)` before saving.
-
-## Keyboard controls (from code)
-
-- `C` clear canvas
-- `Z` undo last stroke
-- `E` export PNG
-- `G` toggle glow
-- `X` cycle symmetry mode
-- `S` cycle draw mode
-- `[` decrease brush size
-- `]` increase brush size
-
-## Requirements
-
-The script imports and uses:
-
-- `opencv-python` (`cv2`)
-- `mediapipe`
-- `pygame`
-
-It also uses Python standard library modules:
-
-- `os`, `sys`, `math`, `datetime`, `threading`, `urllib.request`, `collections.deque`
-
+---
 
 ## Table of Contents
 
 - [Overview](#overview)
-- [Feature Highlights](#feature-highlights)
-- [Architecture](#architecture)
-- [Project Structure](#project-structure)
+- [Features](#features)
 - [Requirements](#requirements)
 - [Installation](#installation)
-- [Quick Start](#quick-start)
+- [Usage](#usage)
 - [Controls](#controls)
-- [Brush and Rendering System](#brush-and-rendering-system)
-- [Performance Notes](#performance-notes)
-- [Configuration Reference](#configuration-reference)
-- [Export and Output](#export-and-output)
-- [Troubleshooting](#troubleshooting)
-- [Security and Privacy](#security-and-privacy)
-- [Roadmap](#roadmap)
-- [Contributing](#contributing)
+- [Brush System](#brush-system)
+- [Gesture Reference](#gesture-reference)
+- [Architecture](#architecture)
+- [Configuration](#configuration)
+- [Known Limitations](#known-limitations)
+- [Author](#author)
 - [License](#license)
+
+---
 
 ## Overview
 
-This project captures live webcam frames, detects hand landmarks with MediaPipe, then converts recognized hand gestures into drawing actions on a transparent canvas in Pygame.
+Hand Painter uses the MediaPipe Hand Landmarker model to track 21 landmarks on each detected hand in real time. Finger positions are mapped to canvas coordinates, enabling freehand drawing through either a continuous-trace mode or a pinch-to-draw mode. The application runs entirely locally — no cloud inference, no network dependency beyond the initial model download.
 
-Core interaction concepts:
+---
 
-- Draw continuously or only while pinching.
-- Select colors, brush sizes, and style stamps from an on-screen panel.
-- Toggle symmetry and glow effects for stylized artwork.
-- Use hover dwell or pinch-click in air to activate UI controls.
-- Save generated art as timestamped PNG files.
+## Features
 
-## Feature Highlights
+- **Dual-hand support** — left and right hands tracked independently with separate drawing states
+- **18 brush styles** — Normal, Chalk, Heart, Star, Square, Diamond, Triangle, Cross, Hexagon, Pentagon, Bubble, Dots, Outline, Sparkle, Cloud, Leaf, Flower, Raindrop, plus a dedicated Eraser
+- **10-color palette** — Green, Cyan, Pink, Gold, White, Red, Orange, Purple, Sky, Lime
+- **4 brush sizes** — XS / S / M / L
+- **Symmetry modes** — None, Vertical, Horizontal, Quad (mirror drawing across axes)
+- **Glow / bloom effect** — soft luminance bloom layered under normal strokes
+- **Opacity control** — finger spread distance maps to stroke alpha (60–255)
+- **Pinch or continuous draw mode** — toggle between pinch-to-activate and always-on tracing
+- **Undo and clear** — per-stroke undo stack (up to 300 strokes) and full canvas clear
+- **PNG export** — saves canvas with a dark background to a timestamped file
+- **Swipe gestures** — swipe up to clear, swipe left to undo (open-hand gestures)
+- **Scrollable UI panel** — all controls accessible via finger hover dwell or pinch-click
+- **Threaded camera capture** — camera runs in a background thread to maintain high render FPS
+- **Smooth tracking** — weighted exponential moving average with velocity-cap filtering
 
-### Input and Tracking
-
-- Real-time hand tracking using `vision.HandLandmarker`.
-- Two-hand support with handedness awareness.
-- Smoothing pipeline (`SmoothTracker`) to reduce cursor jitter.
-- Pinch detection hysteresis (`PINCH_ON` / `PINCH_OFF`) for stability.
-- Swipe gesture shortcuts:
-  - Swipe up: clear canvas
-  - Swipe left: undo
-
-### Drawing and Effects
-
-- Drawing modes:
-  - `CONTINUOUS`
-  - `PINCH`
-- Brush sizes: `XS`, `S`, `M`, `L`.
-- Expanded color palette.
-- Rich style set including shape stamps and eraser mode.
-- Symmetry modes: `NONE`, `VERTICAL`, `HORIZONTAL`, `QUAD`.
-- Optional glow effect for bright strokes.
-- Opacity linked to finger spread.
-
-### User Interface
-
-- Scrollable control panel with sections for:
-  - Mode / symmetry / glow
-  - Brush size
-  - Color swatches
-  - Style selection
-  - Actions (undo, clear, export)
-- Air interaction support:
-  - Hover dwell activation
-  - Pinch-to-click activation
-- Keyboard shortcuts for fast operation.
-
-## Architecture
-
-High-level runtime flow:
-
-1. `download_model()` ensures the hand landmarker model exists locally.
-2. `CameraThread` continuously captures camera frames and runs MediaPipe inference in the background.
-3. Main Pygame loop:
-   - Consumes latest frame + hand landmarks.
-   - Converts landmarks to pointer positions and gesture states.
-   - Updates per-hand `HandDrawer` state.
-   - Renders incremental stroke updates to the canvas.
-   - Draws UI panel and live HUD.
-
-Primary components:
-
-- `CameraThread`: non-blocking acquisition + inference.
-- `SmoothTracker`: weighted moving average smoothing.
-- `HandDrawer`: gesture-to-stroke state machine and rendering pipeline.
-- `Button` / `ColorButton`: panel interaction primitives.
-
-## Project Structure
-
-```text
-.
-├── hand_painter.py   # Main application entry point and all runtime logic
-└── README.md         # Project documentation
-```
+---
 
 ## Requirements
 
-- Python 3.9 or newer
-- Webcam (USB or integrated)
-- Operating system with graphics support for Pygame
+| Dependency | Version |
+|---|---|
+| Python | 3.8 or later |
+| mediapipe | 0.10.x |
+| opencv-python | 4.x |
+| pygame | 2.x |
 
-Python packages:
+A webcam capable of at least 720p is recommended. The application internally processes frames at 640x360 for hand detection and renders at 1280x720.
 
-- `opencv-python`
-- `mediapipe`
-- `pygame`
+---
 
 ## Installation
 
-1. Clone the repository:
+**1. Clone the repository**
 
 ```bash
-git clone https://github.com/amadhan882/Air-Draw.git
-cd Air-Draw
+git clone https://github.com/amadhan82/hand-painter.git
+cd hand-painter
 ```
 
-2. Create and activate a virtual environment:
+**2. Create and activate a virtual environment (recommended)**
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
+python -m venv venv
+
+# Windows
+venv\Scripts\activate
+
+# macOS / Linux
+source venv/bin/activate
 ```
 
-3. Install dependencies:
+**3. Install dependencies**
 
 ```bash
-pip install --upgrade pip
-pip install opencv-python mediapipe pygame
+pip install mediapipe opencv-python pygame
 ```
 
-## Quick Start
-
-Run the application:
+**4. Run the application**
 
 ```bash
 python hand_painter.py
 ```
 
-On first run, the script downloads the hand landmarker model to:
+On first launch, the MediaPipe hand landmark model (`hand_landmarker.task`, ~29 MB) is downloaded automatically from Google's model storage and saved alongside the script. Subsequent launches use the cached file.
 
-- `hand_landmarker.task`
+---
 
-## File layout
+## Usage
 
-```text
-.
-├── hand_painter.py
-└── README.md
-```
+1. Position yourself so your hand(s) are visible to the webcam within the frame.
+2. The right panel displays all brush controls. Hover your index finger over a button for approximately 0.7 seconds to activate it, or perform a pinch gesture while hovering.
+3. Keep your hand in the left portion of the screen (away from the panel) to draw.
+4. The panel auto-hides while you are actively drawing and your hand is not near it.
 
-## Notes
-
-- The current implementation is monolithic in one Python file.
-- No automated test suite is included in this repository.
-- This repository currently does not include a `LICENSE` file.
-On first launch, the MediaPipe hand landmarker model is downloaded automatically and stored as:
-
-```text
-hand_landmarker.task
-```
+---
 
 ## Controls
 
 ### Keyboard Shortcuts
 
-- `C`: clear canvas
-- `Z`: undo last stroke
-- `E`: export canvas as PNG
-- `G`: toggle glow
-- `X`: cycle symmetry mode
-- `S`: cycle draw mode
-- `[` / `]`: decrease / increase brush size
-- Window close button: exit application
+| Key | Action |
+|---|---|
+| `Z` | Undo last stroke |
+| `C` | Clear canvas |
+| `E` | Export canvas to PNG |
+| `G` | Toggle glow effect |
+| `X` | Cycle symmetry mode |
+| `S` | Toggle draw mode (Continuous / Pinch) |
+| `[` | Decrease brush size |
+| `]` | Increase brush size |
 
-### Air UI Interaction
+### Mouse
 
-- Move index fingertip over panel controls.
-- Trigger control via either:
-  - Dwell (hover for configured delay), or
-  - Pinch click while hovering.
+- **Left-click** on any panel button to activate it immediately.
+- **Scroll wheel** while the cursor is over the panel to scroll through controls.
 
-## Brush and Rendering System
+---
 
-The renderer supports two broad categories:
+## Brush System
 
-1. Line-based rendering:
-   - `NORMAL`: multi-pass edge/mid/core stroke layering
-   - `CHALK`: randomized textured dots for grain
+### Sizes
 
-2. Stamp-based rendering:
-   - Shape stamps such as heart, star, diamond, triangle, hexagon, pentagon, cloud, leaf, flower, and raindrop
-   - Cached in `_shape_cache` for reuse and reduced draw overhead
+| Label | Draw Radius |
+|---|---|
+| XS | 2 px |
+| S | 4 px |
+| M | 8 px |
+| L | 14 px |
 
-Additional behavior:
+### Styles
 
-- Eraser mode removes pixels from the alpha canvas.
-- Glow mode composites translucent bloom layers around bright strokes.
-- Symmetry mode mirrors stroke segments based on the selected axis mode.
+Styles are stamped along the stroke path at regular intervals. Shape stamps are cached by `(style, radius, color)` to avoid redundant surface allocation.
 
-## Performance Notes
+- **NORMAL** — anti-aliased multi-layer line with optional glow bloom
+- **CHALK** — randomized particle scatter simulating chalk texture
+- **ERASER** — alpha-channel eraser using `BLEND_RGBA_MIN` composite
+- **Shape styles** (HEART, STAR, SQUARE, DIAMOND, TRIANGLE, CROSS, HEXAGON, PENTAGON, BUBBLE, DOTS, OUTLINE, SPARKLE, CLOUD, LEAF, FLOWER, RAINDROP) — pre-rendered polygon/circle stamp blitted along the path
 
-- Inference runs on resized frames (`PROCESS_W`, `PROCESS_H`) to balance speed and quality.
-- Rendering is incremental by default; full redraw only occurs when required (undo/clear).
-- Frequently reused visual assets are cached:
-  - Shape stamps in `_shape_cache`
-  - Chalk dots in `_chalk_cache`
-  - UI text labels in `_label_cache`
+### Symmetry Modes
 
-## Configuration Reference
+| Mode | Behaviour |
+|---|---|
+| NONE | Normal single-line drawing |
+| VERTICAL | Mirrors strokes across the vertical centre axis |
+| HORIZONTAL | Mirrors strokes across the horizontal centre axis |
+| QUAD | Mirrors across both axes simultaneously (4 copies) |
 
-You can tune behavior by editing constants near the top of `hand_painter.py`:
+Guide lines are drawn on-screen when a symmetry mode is active.
 
-- Window and frame settings:
-  - `WINDOW_WIDTH`, `WINDOW_HEIGHT`, `FPS`
-  - `PROCESS_W`, `PROCESS_H`
-- Gesture thresholds:
-  - `PINCH_ON`, `PINCH_OFF`
-  - `MIN_MOVE`, `MAX_JUMP`
-- UI timing and layout:
-  - `DWELL_SEC`
-  - `PANEL_W`, `PANEL_BOTTOM_RESERVE`, `PANEL_SCROLL_SPEED`
-- Feature toggles:
-  - `GLOW_ENABLED_DEFAULT`
+### Opacity
 
-## Export and Output
+Spread your fingers apart (measure between index tip and pinky tip) to increase opacity. A closed-finger pose produces approximately 60 alpha; a fully open hand produces 255. The current opacity is visualised by the bar at the bottom of the panel and the preview circle.
 
-- Export action writes a timestamped PNG named:
+---
 
-```text
-handpainter_YYYYMMDD_HHMMSS.png
+## Gesture Reference
+
+| Gesture | Action |
+|---|---|
+| Index fingertip position | Cursor / draw position |
+| Pinch (thumb + index) | Draw (in Pinch mode) / activate UI button |
+| Finger hover over button (0.7 s) | Activate UI button |
+| Open-hand swipe up | Clear canvas |
+| Open-hand swipe left | Undo last stroke |
+| Finger spread width | Controls stroke opacity |
+
+Swipe detection uses a 5-frame velocity buffer on the wrist landmark. A swipe is registered when average speed exceeds 40 px/frame with a dominant directional component greater than 25 px/frame.
+
+---
+
+## Architecture
+
+```
+hand_painter.py
+├── CameraThread          — Background thread: capture, resize, MediaPipe inference
+├── SmoothTracker         — Exponential moving average + circular buffer for finger smoothing
+├── HandDrawer            — Stroke state machine, incremental and full redraw, swipe detection
+│   └── _render_segment   — Per-segment renderer dispatching to shape/chalk/normal paths
+├── Button / ColorButton  — UI widget with dwell timer, pinch-click, and selection state
+├── Shape cache           — LRU-style dict keyed on (style, radius, color)
+├── Chalk cache           — Per-(color, alpha) dot surface
+└── main()                — Event loop, camera data polling, canvas compositing, UI layout
 ```
 
-- Exported images are generated on a dark background for good visual contrast outside the app.
+**Rendering pipeline per frame:**
 
-## Troubleshooting
+1. Camera thread produces the latest frame and MediaPipe result under a lock.
+2. Main thread reads landmark data, updates each `HandDrawer`, and appends new points.
+3. `draw_incremental` renders only newly added stroke segments onto the persistent `canvas` surface.
+4. On undo or clear, `redraw_all` repaints the entire canvas from the stroke deque.
+5. The camera image (or solid background when hands are detected), canvas, symmetry guides, skeleton overlay, and UI panel are composited onto the screen surface in order.
 
-### Camera not detected
+---
 
-- Confirm no other application is locking the webcam.
-- Try reconnecting camera hardware.
-- On Linux, validate permissions for video devices.
+## Configuration
 
-### Low FPS or lag
+All tunable constants are declared at the top of `hand_painter.py` under the `CONFIG` block.
 
-- Reduce processing resolution (`PROCESS_W`, `PROCESS_H`).
-- Disable glow to reduce overdraw cost.
-- Close other GPU/CPU intensive applications.
+| Constant | Default | Description |
+|---|---|---|
+| `WINDOW_WIDTH` / `WINDOW_HEIGHT` | 1280 / 720 | Render resolution |
+| `PROCESS_W` / `PROCESS_H` | 640 / 360 | Hand detection resolution |
+| `FPS` | 120 | Target frame rate cap |
+| `MAX_STROKES` | 300 | Maximum strokes retained in undo history |
+| `MAX_PTS` | 600 | Maximum points per stroke |
+| `MIN_MOVE` | 1.5 px | Minimum cursor movement to append a point |
+| `MAX_JUMP` | 250 px | Maximum inter-frame jump before the point is discarded |
+| `PINCH_ON` | 0.042 | Normalised distance threshold to enter pinch state |
+| `PINCH_OFF` | 0.062 | Normalised distance threshold to exit pinch state |
+| `DWELL_SEC` | 0.7 s | Hover duration required to trigger a UI button |
+| `PANEL_W` | 220 px | Width of the right-side control panel |
+| `GLOW_ENABLED_DEFAULT` | True | Initial glow state on launch |
 
-### Hand tracking unstable
+---
 
-- Improve front lighting and reduce background clutter.
-- Keep hand centered and within camera field of view.
-- Raise confidence thresholds only if needed after testing.
+## Known Limitations
 
-### Dependency install issues
+- Detection confidence degrades under poor lighting or against backgrounds with skin-tone colours.
+- Chalk style uses `random.randint` per segment step; at large brush sizes and high speed this can cause brief CPU spikes.
+- The shape stamp cache grows unbounded during a session; very long sessions with many style/size/colour combinations will accumulate memory proportionally.
+- Swipe gestures may misfire if the drawing hand moves quickly across the canvas near the panel boundary.
+- Export saves at the render resolution (1280x720) regardless of display DPI.
 
-- Ensure `pip` is up to date.
-- Use a clean virtual environment.
-- Verify Python version compatibility with installed package releases.
+---
 
-## Security and Privacy
+## Author
 
-- The application processes camera frames locally.
-- No telemetry or remote frame upload is implemented in this codebase.
-- The model file is downloaded from Google Cloud Storage on first run.
+**Madhan Alagarsamy**
 
-## Roadmap
+- GitHub: [@amadhan82](https://github.com/amadhan82)
 
-Potential future improvements:
-
-- Modularize code into multiple files (`ui`, `render`, `tracking`, `config`).
-- Add configuration file support (YAML or TOML).
-- Add unit tests for gesture logic and geometry utilities.
-- Add packaging metadata and CLI launch options.
-- Add recording or time-lapse export.
-
-## Contributing
-
-1. Fork the project and create a feature branch.
-2. Make your changes with clear commit messages.
-3. Run static checks and local validation.
-4. Open a pull request with a concise problem/solution summary.
+---
 
 ## License
 
-This repository is available under the MIT License.
+This project is released under the MIT License. See [LICENSE](LICENSE) for details.
 
-If you intend to use a different license, replace this section and add a dedicated `LICENSE` file.
+MediaPipe is developed by Google and is subject to the [Apache 2.0 License](https://github.com/google-ai-edge/mediapipe/blob/master/LICENSE).
