@@ -262,6 +262,5 @@ All tunable constants are declared at the top of `hand_painter.py` under the `CO
 
 ## License
 
-This project is released under the MIT License. See [LICENSE](LICENSE) for details.
-
-MediaPipe is developed by Google and is subject to the [Apache 2.0 License](https://github.com/google-ai-edge/mediapipe/blob/master/LICENSE).
+- This project is released under the MIT License. See [LICENSE](LICENSE) for details.
+- MediaPipe is developed by Google and is subject to the [Apache 2.0 License](https://github.com/google-ai-edge/mediapipe/blob/master/LICENSE).
