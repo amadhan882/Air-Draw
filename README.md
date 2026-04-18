@@ -57,14 +57,28 @@ Hand Painter uses the MediaPipe Hand Landmarker model to track 21 landmarks on e
 
 ## Requirements
 
-| Dependency | Version |
-|---|---|
-| Python | 3.8 or later |
-| mediapipe | 0.10.x |
-| opencv-python | 4.x |
-| pygame | 2.x |
+| Dependency | Minimum Version | Tested Version |
+|---|---|---|
+| Python | 3.8 or later | 3.13.5 |
+| mediapipe | 0.10.x | 0.10.33 |
+| opencv-python | 4.x | 4.13.0.92 |
+| pygame | 2.x | 2.6.1 |
 
 A webcam capable of at least 720p is recommended. The application internally processes frames at 640x360 for hand detection and renders at 1280x720.
+
+### Tested Environment
+
+This project has been verified on the following setup:
+
+| Property | Value |
+|---|---|
+| OS | Windows 11 |
+| Python | 3.13.5 |
+| mediapipe | 0.10.33 |
+| opencv-python | 4.13.0.92 |
+| pygame | 2.6.1 |
+
+> **Note:** mediapipe 0.10.33 automatically installs `opencv-contrib-python` as a dependency. If you already have `opencv-python` installed, both can coexist without conflict.
 
 ---
 
@@ -73,8 +87,8 @@ A webcam capable of at least 720p is recommended. The application internally pro
 **1. Clone the repository**
 
 ```bash
-git clone https://github.com/amadhan82/hand-painter.git
-cd hand-painter
+git clone https://github.com/amadhan82/Air-Draw.git
+cd Air-Draw
 ```
 
 **2. Create and activate a virtual environment (recommended)**
@@ -245,9 +259,9 @@ All tunable constants are declared at the top of `hand_painter.py` under the `CO
 
 ## Author
 
-**Madhan Alagarsamy**
-
-- GitHub: [@amadhan82](https://github.com/amadhan82)
+- Developed by **Madhan Alagarsamy**
+- Security Researcher
+- GitHub: [https://github.com/amadhan82](https://github.com/amadhan82)
 
 ---
 
