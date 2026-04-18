@@ -92,23 +92,6 @@ It also uses Python standard library modules:
 
 - `os`, `sys`, `math`, `datetime`, `threading`, `urllib.request`, `collections.deque`
 
-## Setup
-
-1. Create and activate a virtual environment.
-2. Install required packages:
-
-```bash
-pip install opencv-python mediapipe pygame
-```
-
-3. Run:
-[![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![MediaPipe](https://img.shields.io/badge/MediaPipe-Hand%20Landmarker-0F9D58)](https://ai.google.dev/edge/mediapipe)
-[![Pygame](https://img.shields.io/badge/Pygame-2.x-1E7F4C)](https://www.pygame.org/)
-[![OpenCV](https://img.shields.io/badge/OpenCV-4.x-5C3EE8?logo=opencv&logoColor=white)](https://opencv.org/)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](#license)
-
-Air-Draw Hand Painter is a real-time, camera-driven drawing application that uses MediaPipe hand landmark tracking and Pygame rendering to enable touchless sketching.
 
 ## Table of Contents
 
