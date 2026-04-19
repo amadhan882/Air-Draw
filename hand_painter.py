@@ -15,6 +15,7 @@ import random
 import hashlib
 import tempfile
 import time
+import json
 import urllib.request
 from collections import OrderedDict, deque
 import datetime
@@ -92,6 +93,8 @@ CHALK_CACHE_MAX = 256
 MODEL_DOWNLOAD_TIMEOUT_SEC = 30
 MODEL_DOWNLOAD_RETRIES = 3
 MODEL_SHA256 = os.getenv("AIR_DRAW_MODEL_SHA256", "").strip().lower()
+SETTINGS_PATH = os.getenv("AIR_DRAW_SETTINGS_PATH", "air_draw_settings.json")
+DIAGNOSTICS_DIR = os.getenv("AIR_DRAW_DIAGNOSTICS_DIR", ".")
 
 
 logging.basicConfig(
@@ -141,6 +144,49 @@ def download_model():
             time.sleep(min(5, attempt))
 
     raise RuntimeError(f"Unable to download model after {MODEL_DOWNLOAD_RETRIES} attempts") from last_exc
+
+
+def _clamp_index(value, upper):
+    if upper <= 0:
+        return 0
+    return max(0, min(int(value), upper - 1))
+
+
+def load_settings():
+    defaults = {
+        "brush_size_idx": 1,
+        "brush_color_idx": 0,
+        "brush_style_idx": 0,
+        "draw_mode_idx": 1,
+        "sym_mode_idx": 0,
+        "glow_enabled": GLOW_ENABLED_DEFAULT,
+    }
+    if not os.path.exists(SETTINGS_PATH):
+        return defaults
+
+    try:
+        with open(SETTINGS_PATH, "r", encoding="utf-8") as fp:
+            data = json.load(fp)
+        defaults.update(data if isinstance(data, dict) else {})
+    except Exception as exc:
+        logger.warning("Failed to load settings from %s: %s", SETTINGS_PATH, exc)
+    return defaults
+
+
+def save_settings(settings):
+    try:
+        with open(SETTINGS_PATH, "w", encoding="utf-8") as fp:
+            json.dump(settings, fp, indent=2, sort_keys=True)
+    except Exception as exc:
+        logger.warning("Failed to save settings to %s: %s", SETTINGS_PATH, exc)
+
+
+def export_diagnostics(payload):
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = os.path.join(DIAGNOSTICS_DIR, f"air_draw_diag_{ts}.json")
+    with open(path, "w", encoding="utf-8") as fp:
+        json.dump(payload, fp, indent=2, sort_keys=True)
+    return path
 
 
 # ================= UTIL =================
@@ -767,6 +813,7 @@ class CameraThread:
 # ================= MAIN =================
 def main():
     download_model()
+    settings = load_settings()
 
     cam_thread = CameraThread(0)
 
@@ -782,13 +829,16 @@ def main():
 
     drawers = {"Left": HandDrawer(), "Right": HandDrawer()}
 
-    brush_size_idx = 1
-    brush_color_idx = 0
-    brush_style_idx = 0
-    draw_mode_idx = 1
-
-    sym_mode_idx = 0
-    glow_enabled = GLOW_ENABLED_DEFAULT
+    brush_size_idx = _clamp_index(settings.get("brush_size_idx", 1), len(BRUSH_SIZES))
+    brush_color_idx = _clamp_index(settings.get("brush_color_idx", 0), len(BRUSH_COLORS))
+    brush_style_idx = _clamp_index(settings.get("brush_style_idx", 0), len(BRUSH_STYLES) + 1)
+    draw_mode_idx = _clamp_index(settings.get("draw_mode_idx", 1), len(DRAW_MODES))
+    sym_mode_idx = _clamp_index(settings.get("sym_mode_idx", 0), len(SYMMETRY_MODES))
+    glow_enabled = bool(settings.get("glow_enabled", GLOW_ENABLED_DEFAULT))
+    show_hud = True
+    settings_dirty = False
+    session_start = time.time()
+    last_diag = ""
     brush_alpha = 255
     export_msg = ""
     export_timer = 0.0
@@ -800,6 +850,16 @@ def main():
         _, col = BRUSH_COLORS[brush_color_idx]
         style = all_styles[brush_style_idx]
         return r, col, style
+
+    def current_settings():
+        return {
+            "brush_size_idx": brush_size_idx,
+            "brush_color_idx": brush_color_idx,
+            "brush_style_idx": brush_style_idx,
+            "draw_mode_idx": draw_mode_idx,
+            "sym_mode_idx": sym_mode_idx,
+            "glow_enabled": glow_enabled,
+        }
 
     px_off = 8
     px = PANEL_X + px_off
@@ -833,23 +893,26 @@ def main():
     mode_btn_ref = []
 
     def toggle_mode():
-        nonlocal draw_mode_idx
+        nonlocal draw_mode_idx, settings_dirty
         draw_mode_idx = (draw_mode_idx + 1) % len(DRAW_MODES)
         mode_btn_ref[0].label = f"MODE:{DRAW_MODES[draw_mode_idx]}"
+        settings_dirty = True
 
     sym_btn_ref = []
 
     def toggle_sym():
-        nonlocal sym_mode_idx
+        nonlocal sym_mode_idx, settings_dirty
         sym_mode_idx = (sym_mode_idx + 1) % len(SYMMETRY_MODES)
         sym_btn_ref[0].label = f"SYM:{SYMMETRY_MODES[sym_mode_idx]}"
+        settings_dirty = True
 
     glow_btn_ref = []
 
     def toggle_glow():
-        nonlocal glow_enabled
+        nonlocal glow_enabled, settings_dirty
         glow_enabled = not glow_enabled
         glow_btn_ref[0].label = f"GLOW:{'ON' if glow_enabled else 'OFF'}"
+        settings_dirty = True
 
     half_w = (bw - gap) // 2
     mb = make_btn(f"MODE:{DRAW_MODES[draw_mode_idx]}", toggle_mode, (40, 60, 80), full_width=False, bw_override=half_w)
@@ -874,10 +937,11 @@ def main():
     for si, (lbl, _r, _o) in enumerate(BRUSH_SIZES):
 
         def _size_action(i=si):
-            nonlocal brush_size_idx
+            nonlocal brush_size_idx, settings_dirty
             brush_size_idx = i
             for k, sb in enumerate(size_btns):
                 sb.selected = k == i
+            settings_dirty = True
 
         bx = px + si * (bw_each + gap)
         b = Button((bx, y, bw_each, bh), lbl, _size_action)
@@ -893,10 +957,11 @@ def main():
     for ci, (_name, col) in enumerate(BRUSH_COLORS):
 
         def _col_action(i=ci):
-            nonlocal brush_color_idx
+            nonlocal brush_color_idx, settings_dirty
             brush_color_idx = i
             for k, cb in enumerate(color_btns):
                 cb.selected = k == i
+            settings_dirty = True
 
         crow = ci // color_cols
         cc = ci % color_cols
@@ -914,10 +979,11 @@ def main():
     for sti, sty in enumerate(all_styles):
 
         def _sty_action(i=sti):
-            nonlocal brush_style_idx
+            nonlocal brush_style_idx, settings_dirty
             brush_style_idx = i
             for k, stb in enumerate(style_btns):
                 stb.selected = k == i
+            settings_dirty = True
 
         row = sti // style_cols
         col = sti % style_cols
@@ -989,6 +1055,8 @@ def main():
 
         for e in pygame.event.get():
             if e.type == pygame.QUIT:
+                if settings_dirty:
+                    save_settings(current_settings())
                 running = False
             if e.type == pygame.KEYDOWN:
                 if e.key == pygame.K_c:
@@ -1004,14 +1072,41 @@ def main():
                 if e.key == pygame.K_s:
                     draw_mode_idx = (draw_mode_idx + 1) % len(DRAW_MODES)
                     mode_btn_ref[0].label = f"MODE:{DRAW_MODES[draw_mode_idx]}"
+                    settings_dirty = True
                 if e.key == pygame.K_LEFTBRACKET:
                     brush_size_idx = max(0, brush_size_idx - 1)
                     for k, sb in enumerate(size_btns):
                         sb.selected = k == brush_size_idx
+                    settings_dirty = True
                 if e.key == pygame.K_RIGHTBRACKET:
                     brush_size_idx = min(len(BRUSH_SIZES) - 1, brush_size_idx + 1)
                     for k, sb in enumerate(size_btns):
                         sb.selected = k == brush_size_idx
+                    settings_dirty = True
+                if e.key == pygame.K_h:
+                    show_hud = not show_hud
+                if e.key == pygame.K_F5:
+                    save_settings(current_settings())
+                    settings_dirty = False
+                    export_msg = f"Settings saved: {SETTINGS_PATH}"
+                    export_timer = 2.5
+                if e.key == pygame.K_F9:
+                    diag_payload = {
+                        "uptime_sec": round(time.time() - session_start, 2),
+                        "fps": round(clock.get_fps(), 2),
+                        "cache": {"shape": len(_shape_cache), "chalk": len(_chalk_cache)},
+                        "strokes": {label: len(d.strokes) for label, d in drawers.items()},
+                        "mode": DRAW_MODES[draw_mode_idx],
+                        "symmetry": SYMMETRY_MODES[sym_mode_idx],
+                        "glow_enabled": glow_enabled,
+                        "settings_path": SETTINGS_PATH,
+                    }
+                    try:
+                        last_diag = export_diagnostics(diag_payload)
+                        export_msg = f"Diagnostics: {last_diag}"
+                    except Exception as exc:
+                        export_msg = f"Diag export failed: {exc}"
+                    export_timer = 3.0
             if e.type == pygame.MOUSEWHEEL:
                 if pygame.mouse.get_pos()[0] >= PANEL_X:
                     panel_scroll = max(0, min(max_scroll, panel_scroll - e.y * PANEL_SCROLL_SPEED))
@@ -1223,19 +1318,20 @@ def main():
 
             screen.blit(panel_surf, (PANEL_X, 0))
 
-            fps = int(clock.get_fps())
-            sn = BRUSH_SIZES[brush_size_idx][0]
-            hud = font_hd.render(
-                f"FPS:{fps}  |  {mode}  |  Size:{sn}"
-                f"  |  Style:{all_styles[brush_style_idx]}"
-                f"  |  Sym:{SYMMETRY_MODES[sym_mode_idx]}"
-                f"  |  Glow:{'ON' if glow_enabled else 'OFF'}"
-                f"  |  [E]Export [G]Glow [X]Sym [Z]Undo [C]Clear [S]Mode",
-                True,
-                (200, 200, 200),
-            )
-            pygame.draw.rect(screen, (0, 0, 0, 160), (0, 0, hud.get_width() + 20, 26))
-            screen.blit(hud, (10, 5))
+            if show_hud:
+                fps = int(clock.get_fps())
+                sn = BRUSH_SIZES[brush_size_idx][0]
+                hud = font_hd.render(
+                    f"FPS:{fps}  |  {mode}  |  Size:{sn}"
+                    f"  |  Style:{all_styles[brush_style_idx]}"
+                    f"  |  Sym:{SYMMETRY_MODES[sym_mode_idx]}"
+                    f"  |  Glow:{'ON' if glow_enabled else 'OFF'}"
+                    f"  |  [E]Export [G]Glow [X]Sym [Z]Undo [C]Clear [S]Mode [F5]Save [F9]Diag [H]HUD",
+                    True,
+                    (200, 200, 200),
+                )
+                pygame.draw.rect(screen, (0, 0, 0, 160), (0, 0, hud.get_width() + 20, 26))
+                screen.blit(hud, (10, 5))
 
         if export_timer > 0 and export_msg:
             msg_surf = font_hd.render(export_msg, True, (80, 255, 140))
@@ -1246,6 +1342,8 @@ def main():
         pygame.display.flip()
 
     cam_thread.stop()
+    if settings_dirty:
+        save_settings(current_settings())
     pygame.quit()
 
 
