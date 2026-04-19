@@ -10,8 +10,13 @@ from mediapipe.tasks.python import vision
 from mediapipe.tasks import python
 import pygame
 import math
+import logging
+import random
+import hashlib
+import tempfile
+import time
 import urllib.request
-from collections import deque
+from collections import OrderedDict, deque
 import datetime
 
 # ================= CONFIG =================
@@ -82,14 +87,60 @@ PANEL_SCROLL_SPEED = 20
 SYMMETRY_MODES = ["NONE", "VERTICAL", "HORIZONTAL", "QUAD"]
 
 GLOW_ENABLED_DEFAULT = True
+SHAPE_CACHE_MAX = 512
+CHALK_CACHE_MAX = 256
+MODEL_DOWNLOAD_TIMEOUT_SEC = 30
+MODEL_DOWNLOAD_RETRIES = 3
+MODEL_SHA256 = os.getenv("AIR_DRAW_MODEL_SHA256", "").strip().lower()
+
+
+logging.basicConfig(
+    level=getattr(logging, os.getenv("AIR_DRAW_LOG_LEVEL", "INFO").upper(), logging.INFO),
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+logger = logging.getLogger("air_draw")
 
 
 # ================= DOWNLOAD =================
 def download_model():
-    if not os.path.exists(MODEL_PATH):
-        print("Downloading MediaPipe hand model…")
-        urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
-        print("Done.")
+    if os.path.exists(MODEL_PATH):
+        logger.info("Using cached model at %s", MODEL_PATH)
+        return
+
+    logger.info("Downloading MediaPipe hand model…")
+    opener = urllib.request.build_opener()
+    opener.addheaders = [("User-Agent", "AirDraw/1.0")]
+    urllib.request.install_opener(opener)
+
+    last_exc = None
+    for attempt in range(1, MODEL_DOWNLOAD_RETRIES + 1):
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".task") as tmp:
+                tmp_path = tmp.name
+            with urllib.request.urlopen(MODEL_URL, timeout=MODEL_DOWNLOAD_TIMEOUT_SEC) as src, open(tmp_path, "wb") as dst:
+                dst.write(src.read())
+
+            if MODEL_SHA256:
+                hasher = hashlib.sha256()
+                with open(tmp_path, "rb") as fp:
+                    for chunk in iter(lambda: fp.read(8192), b""):
+                        hasher.update(chunk)
+                got = hasher.hexdigest().lower()
+                if got != MODEL_SHA256:
+                    raise RuntimeError(f"SHA256 mismatch for model. expected={MODEL_SHA256} got={got}")
+
+            os.replace(tmp_path, MODEL_PATH)
+            logger.info("Model downloaded successfully to %s", MODEL_PATH)
+            return
+        except Exception as exc:
+            last_exc = exc
+            logger.warning("Model download attempt %d/%d failed: %s", attempt, MODEL_DOWNLOAD_RETRIES, exc)
+            if tmp_path and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            time.sleep(min(5, attempt))
+
+    raise RuntimeError(f"Unable to download model after {MODEL_DOWNLOAD_RETRIES} attempts") from last_exc
 
 
 # ================= UTIL =================
@@ -143,12 +194,13 @@ def mirror_points(pos, sym_mode):
 
 
 # ================= CACHES =================
-_shape_cache = {}
+_shape_cache = OrderedDict()
 
 
 def get_shape_stamp(style, r, color):
     key = (style, r, color)
     if key in _shape_cache:
+        _shape_cache.move_to_end(key)
         return _shape_cache[key]
 
     size = int(r * 3) + 4
@@ -239,20 +291,27 @@ def get_shape_stamp(style, r, color):
         pygame.draw.circle(surf, color, (cx, cy + r // 2), max(1, r // 2))
 
     _shape_cache[key] = (surf, cx)
+    _shape_cache.move_to_end(key)
+    while len(_shape_cache) > SHAPE_CACHE_MAX:
+        _shape_cache.popitem(last=False)
     return surf, cx
 
 
-_chalk_cache = {}
+_chalk_cache = OrderedDict()
 
 
 def get_chalk_dot(color, a):
     a = (a // 20) * 20
     key = (color, a)
     if key in _chalk_cache:
+        _chalk_cache.move_to_end(key)
         return _chalk_cache[key]
     cs = pygame.Surface((3, 3), pygame.SRCALPHA)
     pygame.draw.circle(cs, (*color, a), (1, 1), 1)
     _chalk_cache[key] = cs
+    _chalk_cache.move_to_end(key)
+    while len(_chalk_cache) > CHALK_CACHE_MAX:
+        _chalk_cache.popitem(last=False)
     return cs
 
 
@@ -496,7 +555,6 @@ class HandDrawer:
 
         elif style == "CHALK":
             steps = max(1, int(dist / 3))
-            import random
 
             for i in range(steps):
                 t = i / steps

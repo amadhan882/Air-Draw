@@ -239,6 +239,18 @@ All tunable constants are declared at the top of `hand_painter.py` under the `CO
 | `DWELL_SEC` | 0.7 s | Hover duration required to trigger a UI button |
 | `PANEL_W` | 220 px | Width of the right-side control panel |
 | `GLOW_ENABLED_DEFAULT` | True | Initial glow state on launch |
+| `SHAPE_CACHE_MAX` / `CHALK_CACHE_MAX` | 512 / 256 | Upper bounds for runtime shape/chalk caches |
+| `MODEL_DOWNLOAD_TIMEOUT_SEC` | 30 | Timeout used per model download attempt |
+| `MODEL_DOWNLOAD_RETRIES` | 3 | Retry count for model download failures |
+
+---
+
+### Environment Overrides
+
+You can override selected production settings via environment variables:
+
+- `AIR_DRAW_LOG_LEVEL` — logging level (`DEBUG`, `INFO`, `WARNING`, ...)
+- `AIR_DRAW_MODEL_SHA256` — expected SHA-256 hash of `hand_landmarker.task` for integrity validation
 
 ---
 
@@ -246,7 +258,7 @@ All tunable constants are declared at the top of `hand_painter.py` under the `CO
 
 - Detection confidence degrades under poor lighting or against backgrounds with skin-tone colours.
 - Chalk style uses `random.randint` per segment step; at large brush sizes and high speed this can cause brief CPU spikes.
-- The shape stamp cache grows unbounded during a session; very long sessions with many style/size/colour combinations will accumulate memory proportionally.
+- Shape/chalk cache limits are now bounded, but very high limits may still increase memory usage.
 - Swipe gestures may misfire if the drawing hand moves quickly across the canvas near the panel boundary.
 - Export saves at the render resolution (1280x720) regardless of display DPI.
 
